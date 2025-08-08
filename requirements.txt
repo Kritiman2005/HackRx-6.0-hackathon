@@ -2,7 +2,9 @@ streamlit
 groq
 langchain
 langchain-community
+langchain-huggingface
 sentence-transformers
 python-dotenv
 faiss-cpu
-
+pypdf
+python-docx
