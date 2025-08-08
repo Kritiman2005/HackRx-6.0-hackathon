@@ -3,3 +3,5 @@ python-dotenv
 groq
 faiss-cpu
 sentence-transformers
+langchain
+langchain-community
