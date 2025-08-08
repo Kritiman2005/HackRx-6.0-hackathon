@@ -1,7 +1,5 @@
-# app.py (extended for scoring and improvement suggestions)
-
+# app.py (updated for PDF embedding during upload)
 import os
-import time
 import traceback
 import streamlit as st
 from dotenv import load_dotenv
@@ -9,8 +7,7 @@ from groq import Groq
 
 from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_community.vectorstores import FAISS
-from document_loader import load_documents
-from vector_store import create_vector_store
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 
 # --- Setup ---
 load_dotenv()
@@ -21,7 +18,7 @@ if not GROQ_API_KEY:
 
 client = Groq(api_key=GROQ_API_KEY)
 
-# --- Helpers ---
+# --- Helper to query Groq ---
 def ask_groq(prompt):
     try:
         response = client.chat.completions.create(
@@ -39,39 +36,58 @@ def ask_groq(prompt):
         st.error(traceback.format_exc())
         return ""
 
-# --- UI Setup ---
+# --- Streamlit UI ---
 st.set_page_config(page_title="📑 Application Review Assistant", layout="wide")
 st.title("📑 Insurance Application Advisor")
 
 mode = st.sidebar.selectbox("Choose Mode", ["Upload", "Review & Score"])
 
+# Use SentenceTransformer embeddings
 embeddings = SentenceTransformerEmbeddings(
     model_name="all-MiniLM-L6-v2",
-    model_kwargs={"device": "cpu"}  # Safe fallback for Macs/CPUs
+    model_kwargs={"device": "cpu"}
 )
+
+INDEX_PATH = "./faiss_index"
+DOCS_DIR = "sample_docs"
+os.makedirs(DOCS_DIR, exist_ok=True)
 
 if mode == "Upload":
     uploaded_file = st.file_uploader("Upload application (PDF, DOCX or TXT)", type=["pdf", "docx", "txt"])
     if uploaded_file:
-        save_path = os.path.join("sample_docs", uploaded_file.name)
-        os.makedirs("sample_docs", exist_ok=True)  # ✅ Create directory if missing
+        save_path = os.path.join(DOCS_DIR, uploaded_file.name)
         with open(save_path, "wb") as f:
             f.write(uploaded_file.read())
         st.success(f"✅ File saved to {save_path}")
 
-        with st.spinner("📥 Ingesting file..."):
-            from ingest import ingest_files
-            ingest_files([save_path])
-        st.success("✅ Ready for review")
+        # --- Load document based on type ---
+        if uploaded_file.name.lower().endswith(".pdf"):
+            loader = PyPDFLoader(save_path)
+        elif uploaded_file.name.lower().endswith(".docx"):
+            loader = Docx2txtLoader(save_path)
+        else:
+            loader = TextLoader(save_path)
+
+        docs = loader.load()
+
+        # --- Create or update FAISS index ---
+        if os.path.exists(INDEX_PATH):
+            vectorstore = FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+            vectorstore.add_documents(docs)
+        else:
+            vectorstore = FAISS.from_documents(docs, embeddings)
+        vectorstore.save_local(INDEX_PATH)
+
+        st.success("✅ File embedded and added to vector store. Ready for review!")
 
 elif mode == "Review & Score":
-    try:
-        vectorstore = FAISS.load_local("./faiss_index", embeddings, allow_dangerous_deserialization=True)
-    except:
+    if not os.path.exists(INDEX_PATH):
         st.error("⚠️ No ingested data found. Upload files first.")
         st.stop()
 
+    vectorstore = FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
     retriever = vectorstore.as_retriever()
+
     user_query = st.text_input("🔎 Describe what to review (e.g., 'insurance for 46M with surgery in Pune'):")
 
     if user_query:
