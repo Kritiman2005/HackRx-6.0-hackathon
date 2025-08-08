@@ -12,6 +12,57 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 # Set Streamlit config
 st.set_page_config(page_title="Groq QA App", layout="wide")
 
+# Inject custom CSS for UI styling
+st.markdown("""
+<style>
+    body {
+        background-color: #f8fafc;
+        font-family: 'Inter', sans-serif;
+    }
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    .card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: 0.3s;
+    }
+    .card:hover {
+        box-shadow: 0 6px 12px rgba(0,0,0,0.08);
+    }
+    .primary-btn {
+        background: linear-gradient(90deg, #2563eb, #1e40af);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        width: 100%;
+    }
+    .primary-btn:hover {
+        background: linear-gradient(90deg, #1e40af, #1d4ed8);
+    }
+    .response-box {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        margin-top: 1rem;
+    }
+    .source-item {
+        border-left: 3px solid #2563eb;
+        padding-left: 10px;
+        margin-bottom: 10px;
+    }
+    .source-item:last-child {
+        margin-bottom: 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Initialize Groq client
 groq_client = Groq(api_key=GROQ_API_KEY)
 
@@ -35,6 +86,7 @@ if mode == "Upload Docs":
         from langchain.text_splitter import RecursiveCharacterTextSplitter
 
         docs = []
+        os.makedirs("sample_docs", exist_ok=True)
         for file in uploaded_files:
             file_path = os.path.join("sample_docs", file.name)
             with open(file_path, "wb") as f:
@@ -78,6 +130,5 @@ elif mode == "Ask Question":
             )
 
             st.markdown("**Answer:**")
-            st.write(response.choices[0].message.content)
-
+            st.markdown(f"<div class='response-box'>{response.choices[0].message.content}</div>", unsafe_allow_html=True)
 
